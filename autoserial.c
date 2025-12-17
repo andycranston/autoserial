@@ -1,4 +1,4 @@
-static char *version = "@(!--#) @(#) autoserial.c, sversion 0.1.0, fversion 013, 24-october-2025";
+static char *version = "@(!--#) @(#) autoserial.c, sversion 0.1.0, fversion 016, 17-december-2025";
 
 /*
  *  autoserial.c
@@ -63,6 +63,10 @@ static char *version = "@(!--#) @(#) autoserial.c, sversion 0.1.0, fversion 013,
 #define DEFAULT_MODE LOCAL_MODE
 
 #define DEFAULT_ESCAPE_CHAR '^'
+
+#define DEFAULT_DRAIN_PERIOD 0
+
+#define MAX_DRAINING_DOTS 17
 
 #define DEFAULT_LOCAL_PORT "/dev/ttyUSB0"
 #define DEFAULT_LOCAL_BAUD "9600"
@@ -191,9 +195,72 @@ void cleanup(int dev_tty)
 
 /**********************************************************************/
 
+void drain(
+	int lp,
+	int drain_period,
+	int dev_tty
+	)
+{
+	struct pollfd		portfd[1];
+	unsigned char		obuf[BUFFER_SIZE];
+	int			dotcount;
+	int			pollretcode;
+	int			n;
+
+	writedev(dev_tty, "<<Draining...");
+
+	dotcount = 0;
+
+	while (TRUE) {
+		portfd[0].fd      = lp;
+		portfd[0].events  = POLLIN;
+
+		pollretcode = poll(portfd, (nfds_t)1, drain_period);
+
+		if (pollretcode < 0) {
+			cleanup(dev_tty);
+			fprintf(stderr, "%s: call to local port poll during drain gave a negative return code of %d\n", g_progname, pollretcode);
+			exit(2);
+		}
+
+		if (pollretcode == 0) {
+			break;
+		}
+
+		if (pollretcode > 0) {
+			n = read(lp, obuf, BUFFER_SIZE);
+
+			if (n < 0) {
+				cleanup(dev_tty);
+				fprintf(stderr, "%s: local port poll said there was data during drain but error when trying to read the data\n", g_progname);
+				exit(2);
+			}
+
+			if (n == 0) {
+				cleanup(dev_tty);
+				fprintf(stderr, "%s: local port poll said there was data but read returned no data\n", g_progname);
+				exit(2);
+			}
+
+			dotcount++;
+
+			if (dotcount < MAX_DRAINING_DOTS) {
+				writedev(dev_tty, ".");
+			}
+		}
+	}
+
+	writedev(dev_tty, "done>>\r\n");
+
+	return;
+}
+
+/**********************************************************************/
+
 int local_connect(
 	int	dev_tty,
 	char	escape_char,
+	int	drain_period,
 	char	*local_port,
 	char	*local_baud
 	)
@@ -232,6 +299,10 @@ int local_connect(
 
 
 	writedev(dev_tty, "<<Connected>>\r\n");
+
+	if (drain_period >= 1) {
+		drain(lp, drain_period, dev_tty);
+	}
 
 	exitflag = FALSE;
 
@@ -343,6 +414,7 @@ int local_connect(
 int bridge_connect(
 	int	dev_tty,
 	char	escape_char,
+	int	drain_period,
 	char	*bridge_host,
 	char	*bridge_tcp
 	)
@@ -499,6 +571,7 @@ int main(int argc, char **argv)
 	/* local declarations */
 	int			mode;
 	char			escape_char;
+	int			drain_period;
 	char			*local_port;
 	char			*local_baud;
 	char			*bridge_host;
@@ -528,6 +601,7 @@ int main(int argc, char **argv)
 
 	/* set default values */
 	escape_char  = DEFAULT_ESCAPE_CHAR;
+	drain_period = DEFAULT_DRAIN_PERIOD;
 	mode         = DEFAULT_MODE;
 	local_port   = DEFAULT_LOCAL_PORT;
 	local_baud   = DEFAULT_LOCAL_BAUD;
@@ -539,7 +613,7 @@ int main(int argc, char **argv)
 	pos_arg_counter = 0;
 
 	while (arg < argc) {
-		if (strcmp(argv[arg], "-d") == 0) {
+		if (strcmp(argv[arg], "--debug") == 0) {
 			debug = 1;
 		} else if (strcmp(argv[arg], "-e") == 0) {
 			arg++;
@@ -555,6 +629,20 @@ int main(int argc, char **argv)
 			}
 
 			escape_char = argv[arg][0];
+		} else if (strcmp(argv[arg], "-d") == 0) {
+			arg++;
+
+			if (arg >= argc) {
+				fprintf(stderr, "%s: expected drain period in milliseconds after the \"-d\" command line option\n", g_progname);
+				exit(1);
+			}
+
+			drain_period = atoi(argv[arg]);
+
+			if (drain_period < 1) {
+				fprintf(stderr, "%s: drain period option must be an integer >= 1 after the \"-d\" command line option\n", g_progname);
+				exit(1);
+			}
 		} else if (argv[arg][0] == '-') {
 			fprintf(stderr, "%s: unrecognised command line option \"%s\"\n", g_progname, argv[arg]);
 			usage();
@@ -591,7 +679,7 @@ int main(int argc, char **argv)
 
 	/* send debug output summarising command lne argument values */
 	if (debug) {
-		printf("Mode ...........: ");
+		printf("Mode ...............: ");
 		switch (mode) {
 			case LOCAL_MODE:
 				printf("local");
@@ -600,9 +688,12 @@ int main(int argc, char **argv)
 				printf("bridge");
 				break;
 			default:
-				fprintf(stderr, "%s: internal error: mode=%d which is out of range\n", g_progname, mode);
+				fprintf(stderr, "\n%s: internal error: mode=%d which is out of range\n", g_progname, mode);
 				exit(2);
 		}
+		putchar('\n');
+		printf("Escape char ........: \"%c\"\n", escape_char);
+		printf("Drain period .......: %d\n", drain_period);
 		printf("Local port..........: \"%s\"\n", local_port);
 		printf("Local baud..........: \"%s\"\n", local_baud);
 		printf("Bridge host ........: \"%s\"\n", bridge_host);
@@ -620,9 +711,9 @@ int main(int argc, char **argv)
 	tcsetattr(dev_tty, TCSANOW, &dev_tty_options);
 
 	if (mode == LOCAL_MODE) {
-		return local_connect(dev_tty, escape_char, local_port, local_baud);
+		return local_connect(dev_tty, escape_char, drain_period, local_port, local_baud);
 	} else if (mode == BRIDGE_MODE) {
-		return bridge_connect(dev_tty, escape_char, bridge_host, bridge_tcp);
+		return bridge_connect(dev_tty, escape_char, drain_period, bridge_host, bridge_tcp);
 	} else {
 		cleanup(dev_tty);
 		fprintf(stderr, "%s: mode %d is invalid (or maybe not supported yet)\n", g_progname, mode);
