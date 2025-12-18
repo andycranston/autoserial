@@ -74,11 +74,40 @@ autoserial -e '~' /dev/ttyUSB0 9600
 to have the `autoserial` command exit when the '~' (tilde) character
 is entered.
 
-## Why is this useful?
+## The -d command line argument
+
+The `-d` command line argument throws away (drains away) any initial
+characters that displayed immediately after connection.
+
+It takes an integer argument which must be equal to or greater than 1. This
+argument specifies the number of milliseconds that `autoserial` has to wait for no
+initial output to appear. For example:
+
+```
+autoserial -d 3000 /dev/ttyUSB0 9600
+```
+
+will connect and then read input from the serial device. When no output is
+present for a period of 3 seconds (3000 milliseconds) `autoserial` continues
+as normal.
+
+This is handy for devices which might still have some output buffered in
+the serial controller chip which essentially makes no send. For example
+some Raritan PDUs spit out some control characters and might display
+the "Username:" login prompt twice. By using `-d 3000` or similar this
+output can be drained (i.e. thrown away) and then the user (or controlling
+automation program) can send a carrige return ("\r") character to get the
+"Username:" prompt.
+
+
+
+## Why is the `autoserial` program useful?
 
 The first usage case I had for the `autoserial` program was to reset a
 Cisco network switch to factory defaults using an `expect` script.
 
+However, it is looking good for connecting to other devices that have
+a serial port such as intelligent PDUs.
+
 ----------------
 End of README.md
-
