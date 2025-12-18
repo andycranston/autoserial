@@ -1,4 +1,4 @@
-static char *version = "@(!--#) @(#) autoserial.c, sversion 0.1.0, fversion 016, 17-december-2025";
+static char *version = "@(!--#) @(#) autoserial.c, sversion 0.1.0, fversion 017, 18-december-2025";
 
 /*
  *  autoserial.c
@@ -100,8 +100,8 @@ struct termios		local_port_options;
 
 void usage()
 {
-	fprintf(stderr, "%s: usage %s [ -e escape_character ] [ serial_port [ baud_rate ] ]\n", g_progname, g_progname);
-	fprintf(stderr, "%s: usage %s [ -e escape_character ] [ bridge_host [ tcp_port# ] ]\n", g_progname, g_progname);
+	fprintf(stderr, "%s: usage %s [ --debug ] [ -d millseconds ] [ -e escape_character ] [ serial_port [ baud_rate ] ]\n", g_progname, g_progname);
+	fprintf(stderr, "%s: usage %s [ --debug ] [ -d millseconds ] [ -e escape_character ] [ bridge_host [ tcp_port# ] ]\n", g_progname, g_progname);
 
 	return;
 }
