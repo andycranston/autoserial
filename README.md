@@ -31,7 +31,7 @@ running on. For example:
 autoserial 10.7.0.10 8089
 ```
 
-to coonect to a TCp to COM serial bridge at IPv4 address 10.7.0.10 running on TCP port number 8089.
+to connect to a TCP to COM serial bridge at IPv4 address 10.7.0.10 running on TCP port number 8089.
 
 You can view, download and run an example of the TCP to COM serial bridge server here:
 
@@ -77,7 +77,7 @@ is entered.
 ## The -d command line argument
 
 The `-d` command line argument throws away (drains away) any initial
-characters that displayed immediately after connection.
+characters that might display immediately after connection.
 
 It takes an integer argument which must be equal to or greater than 1. This
 argument specifies the number of milliseconds that `autoserial` has to wait for no
@@ -92,11 +92,14 @@ present for a period of 3 seconds (3000 milliseconds) `autoserial` continues
 as normal.
 
 This is handy for devices which might still have some output buffered in
-the serial controller chip which essentially makes no send. For example
+the serial controller chip which are most likely `stale` output and could confuse
+any automation logic which might be driving the `autoserial` program.
+
+For example
 some Raritan PDUs spit out some control characters and might display
 the "Username:" login prompt twice. By using `-d 3000` or similar this
 output can be drained (i.e. thrown away) and then the user (or controlling
-automation program) can send a carrige return ("\r") character to get the
+automation logic) can send a carrige return ("\r") character to get the
 "Username:" prompt.
 
 
